@@ -34,12 +34,19 @@ type ChoiceItem struct {
 	Index        int    `json:"index"`
 	Logprobs     int    `json:"logprobs"`
 	FinishReason string `json:"finish_reason"`
+	Message		 Msg	`json:"message"`
+}
+
+type Msg struct {
+	Role string `json:"role"`
+	Content string `json:"content"`
 }
 
 // ChatGPTRequestBody 响应体
 type ChatGPTRequestBody struct {
 	Model            string  `json:"model"`
-	Prompt           string  `json:"prompt"`
+	Messages			[]Msg	`json:"messages,omitempty"`
+	Prompt           string  `json:"prompt,omitempty"`
 	MaxTokens        uint    `json:"max_tokens"`
 	Temperature      float64 `json:"temperature"`
 	TopP             int     `json:"top_p"`
@@ -52,14 +59,14 @@ type ChatGPTRequestBody struct {
 //-H "Content-Type: application/json"
 //-H "Authorization: Bearer your chatGPT key"
 //-d '{"model": "text-davinci-003", "prompt": "give me good song", "temperature": 0, "max_tokens": 7}'
-func Completions(msg string) (string, error) {
+func Completions(uid string, msg string) (string, error) {
 	var gptResponseBody *ChatGPTResponseBody
 	var resErr error
 	for retry := 1; retry <= 3; retry++ {
 		if retry > 1 {
 			time.Sleep(time.Duration(retry-1) * 100 * time.Millisecond)
 		}
-		gptResponseBody, resErr = httpRequestCompletions(msg, retry)
+		gptResponseBody, resErr = httpRequestCompletions(uid, msg, retry)
 		if resErr != nil {
 			log.Printf("gpt request(%d) error: %v\n", retry, resErr)
 			continue
@@ -72,27 +79,87 @@ func Completions(msg string) (string, error) {
 		return "", resErr
 	}
 	var reply string
-	if gptResponseBody != nil && len(gptResponseBody.Choices) > 0 {
-		reply = gptResponseBody.Choices[0].Text
+
+	cfg := config.LoadConfig()
+	if cfg.ApiKey == "" {
+		return "", errors.New("api key required")
+	}
+	if cfg.Model == "gpt-3.5-turbo-0301" {
+		if gptResponseBody != nil && len(gptResponseBody.Choices) > 0 {
+			reply = gptResponseBody.Choices[0].Message.Content
+
+			addMsg(uid, Msg{
+				Role:"assistant",
+						Content:reply,
+			})
+		}
+	}else {
+		if gptResponseBody != nil && len(gptResponseBody.Choices) > 0 {
+			reply = gptResponseBody.Choices[0].Text
+		}
 	}
 	return reply, nil
 }
 
-func httpRequestCompletions(msg string, runtimes int) (*ChatGPTResponseBody, error) {
+func getUserMsgArray(uid string, msg string)([]Msg){
+	addMsg(uid, Msg{
+		Role:"user",
+				Content:msg,
+	})
+	msgs, _ := msgMap[uid]
+	msgsJson, _ := json.Marshal(msgs)
+	log.Printf("gpt %s request(%s)", msg, string(msgsJson))
+	return msgs
+}
+
+// 假设需要存储的uid是int类型
+var msgMap map[string][]Msg = make(map[string][]Msg)
+
+// 存储Msg到uid对应的数组中
+func addMsg(uid string, msg Msg) {
+    msgs, ok := msgMap[uid]
+    if !ok {
+        // 如果uid对应的数组不存在，则创建一个新的数组
+        msgs = make([]Msg, 0, 20)
+    }
+    // 将msg添加到数组中
+    msgs = append(msgs,msg)
+    // 如果数组的长度超过20，则删除最后一个元素
+    if len(msgs) > 20 {
+        msgs = msgs[1:]
+    }
+    // 更新msgMap中对应uid的数组
+    msgMap[uid] = msgs
+}
+
+func httpRequestCompletions(uid string, msg string, runtimes int) (*ChatGPTResponseBody, error) {
 	cfg := config.LoadConfig()
 	if cfg.ApiKey == "" {
 		return nil, errors.New("api key required")
 	}
-
-	requestBody := ChatGPTRequestBody{
-		Model:            cfg.Model,
-		Prompt:           msg,
-		MaxTokens:        cfg.MaxTokens,
-		Temperature:      cfg.Temperature,
-		TopP:             1,
-		FrequencyPenalty: 0,
-		PresencePenalty:  0,
+	var requestBody ChatGPTRequestBody
+	if cfg.Model == "gpt-3.5-turbo-0301" {
+		requestBody = ChatGPTRequestBody{
+			Model:            cfg.Model,
+			Messages:         getUserMsgArray(uid, msg),
+			MaxTokens:        cfg.MaxTokens,
+			Temperature:      cfg.Temperature,
+			TopP:             1,
+			FrequencyPenalty: 0,
+			PresencePenalty:  0,
+		}
+	} else {
+		requestBody = ChatGPTRequestBody{
+			Model:            cfg.Model,
+			Prompt:           msg,
+			MaxTokens:        cfg.MaxTokens,
+			Temperature:      cfg.Temperature,
+			TopP:             1,
+			FrequencyPenalty: 0,
+			PresencePenalty:  0,
+		}
 	}
+	
 	requestData, err := json.Marshal(requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("json.Marshal requestBody error: %v", err)
@@ -100,7 +167,14 @@ func httpRequestCompletions(msg string, runtimes int) (*ChatGPTResponseBody, err
 
 	log.Printf("gpt request(%d) json: %s\n", runtimes, string(requestData))
 
-	req, err := http.NewRequest(http.MethodPost, "https://api.openai.com/v1/completions", bytes.NewBuffer(requestData))
+	var url string
+	if cfg.Model == "gpt-3.5-turbo-0301" {
+		url = "https://api.openai.com/v1/chat/completions"
+	}else {
+		url = "https://api.openai.com/v1/completions"
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(requestData))
 	if err != nil {
 		return nil, fmt.Errorf("http.NewRequest error: %v", err)
 	}

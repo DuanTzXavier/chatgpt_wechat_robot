@@ -109,7 +109,7 @@ func (g *GroupMessageHandler) ReplyText() error {
 	}
 
 	// 3.请求GPT获取回复
-	reply, err = gpt.Completions(requestText)
+	reply, err = gpt.Completions(g.group.NickName, requestText)
 	if err != nil {
 		text := err.Error()
 		if strings.Contains(err.Error(), "context deadline exceeded") {

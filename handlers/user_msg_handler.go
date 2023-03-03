@@ -90,7 +90,7 @@ func (h *UserMessageHandler) ReplyText() error {
 	}
 
 	// 2.向GPT发起请求，如果回复文本等于空,不回复
-	reply, err = gpt.Completions(h.getRequestText())
+	reply, err = gpt.Completions(h.sender.NickName, h.msg.Content)
 	if err != nil {
 		text := err.Error()
 		if strings.Contains(err.Error(), "context deadline exceeded") {
