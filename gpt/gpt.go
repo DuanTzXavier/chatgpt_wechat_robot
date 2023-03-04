@@ -34,18 +34,18 @@ type ChoiceItem struct {
 	Index        int    `json:"index"`
 	Logprobs     int    `json:"logprobs"`
 	FinishReason string `json:"finish_reason"`
-	Message		 Msg	`json:"message"`
+	Message      Msg    `json:"message"`
 }
 
 type Msg struct {
-	Role string `json:"role"`
+	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
 // ChatGPTRequestBody 响应体
 type ChatGPTRequestBody struct {
 	Model            string  `json:"model"`
-	Messages			[]Msg	`json:"messages,omitempty"`
+	Messages         []Msg   `json:"messages,omitempty"`
 	Prompt           string  `json:"prompt,omitempty"`
 	MaxTokens        uint    `json:"max_tokens"`
 	Temperature      float64 `json:"temperature"`
@@ -55,10 +55,10 @@ type ChatGPTRequestBody struct {
 }
 
 // Completions gtp文本模型回复
-//curl https://api.openai.com/v1/completions
-//-H "Content-Type: application/json"
-//-H "Authorization: Bearer your chatGPT key"
-//-d '{"model": "text-davinci-003", "prompt": "give me good song", "temperature": 0, "max_tokens": 7}'
+// curl https://api.openai.com/v1/completions
+// -H "Content-Type: application/json"
+// -H "Authorization: Bearer your chatGPT key"
+// -d '{"model": "text-davinci-003", "prompt": "give me good song", "temperature": 0, "max_tokens": 7}'
 func Completions(uid string, msg string) (string, error) {
 	var gptResponseBody *ChatGPTResponseBody
 	var resErr error
@@ -88,12 +88,12 @@ func Completions(uid string, msg string) (string, error) {
 		if gptResponseBody != nil && len(gptResponseBody.Choices) > 0 {
 			reply = gptResponseBody.Choices[0].Message.Content
 
-			addMsg(uid, Msg{
-				Role:"assistant",
-						Content:reply,
-			})
+			// addMsg(uid, Msg{
+			// 	Role:"assistant",
+			// 			Content:reply,
+			// })
 		}
-	}else {
+	} else {
 		if gptResponseBody != nil && len(gptResponseBody.Choices) > 0 {
 			reply = gptResponseBody.Choices[0].Text
 		}
@@ -101,10 +101,10 @@ func Completions(uid string, msg string) (string, error) {
 	return reply, nil
 }
 
-func getUserMsgArray(uid string, msg string)([]Msg){
+func getUserMsgArray(uid string, msg string) []Msg {
 	addMsg(uid, Msg{
-		Role:"user",
-				Content:msg,
+		Role:    "user",
+		Content: msg,
 	})
 	msgs, _ := msgMap[uid]
 	msgsJson, _ := json.Marshal(msgs)
@@ -117,19 +117,19 @@ var msgMap map[string][]Msg = make(map[string][]Msg)
 
 // 存储Msg到uid对应的数组中
 func addMsg(uid string, msg Msg) {
-    msgs, ok := msgMap[uid]
-    if !ok {
-        // 如果uid对应的数组不存在，则创建一个新的数组
-        msgs = make([]Msg, 0, 20)
-    }
-    // 将msg添加到数组中
-    msgs = append(msgs,msg)
-    // 如果数组的长度超过20，则删除最后一个元素
-    if len(msgs) > 20 {
-        msgs = msgs[1:]
-    }
-    // 更新msgMap中对应uid的数组
-    msgMap[uid] = msgs
+	msgs, ok := msgMap[uid]
+	if !ok {
+		// 如果uid对应的数组不存在，则创建一个新的数组
+		msgs = make([]Msg, 0, 20)
+	}
+	// 将msg添加到数组中
+	msgs = append(msgs, msg)
+	// 如果数组的长度超过20，则删除最后一个元素
+	if len(msgs) > 20 {
+		msgs = msgs[1:]
+	}
+	// 更新msgMap中对应uid的数组
+	msgMap[uid] = msgs
 }
 
 func httpRequestCompletions(uid string, msg string, runtimes int) (*ChatGPTResponseBody, error) {
@@ -159,7 +159,7 @@ func httpRequestCompletions(uid string, msg string, runtimes int) (*ChatGPTRespo
 			PresencePenalty:  0,
 		}
 	}
-	
+
 	requestData, err := json.Marshal(requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("json.Marshal requestBody error: %v", err)
@@ -170,7 +170,7 @@ func httpRequestCompletions(uid string, msg string, runtimes int) (*ChatGPTRespo
 	var url string
 	if cfg.Model == "gpt-3.5-turbo-0301" {
 		url = "https://api.openai.com/v1/chat/completions"
-	}else {
+	} else {
 		url = "https://api.openai.com/v1/completions"
 	}
 
