@@ -85,7 +85,7 @@ func (h *UserMessageHandler) ReplyText() error {
 	}
 
 	// 3.返回错误
-	return reply2user(h, h.msg.Content, true, 0)
+	return reply2user(h, h.msg.Content, false, 0)
 }
 
 func reply2user(h *UserMessageHandler, content string, fromAssistant bool, times int) error {
