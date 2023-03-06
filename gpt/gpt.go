@@ -59,14 +59,15 @@ type ChatGPTRequestBody struct {
 // -H "Content-Type: application/json"
 // -H "Authorization: Bearer your chatGPT key"
 // -d '{"model": "text-davinci-003", "prompt": "give me good song", "temperature": 0, "max_tokens": 7}'
-func Completions(uid string, msg string) (string, error) {
+func Completions(uid string, msg string, fromAssistant bool) (string, string, error) {
 	var gptResponseBody *ChatGPTResponseBody
 	var resErr error
+	var request = getRequest(uid, msg, fromAssistant)
 	for retry := 1; retry <= 3; retry++ {
 		if retry > 1 {
 			time.Sleep(time.Duration(retry-1) * 100 * time.Millisecond)
 		}
-		gptResponseBody, resErr = httpRequestCompletions(uid, msg, retry)
+		gptResponseBody, resErr = httpRequestCompletions(request, retry)
 		if resErr != nil {
 			log.Printf("gpt request(%d) error: %v\n", retry, resErr)
 			continue
@@ -76,29 +77,27 @@ func Completions(uid string, msg string) (string, error) {
 		}
 	}
 	if resErr != nil {
-		return "", resErr
+		return "", "", resErr
 	}
 	var reply string
+	var reason string = ""
 
 	cfg := config.LoadConfig()
 	if cfg.ApiKey == "" {
-		return "", errors.New("api key required")
+		return "", "", errors.New("api key required")
 	}
 	if cfg.Model == "gpt-3.5-turbo-0301" {
 		if gptResponseBody != nil && len(gptResponseBody.Choices) > 0 {
 			reply = gptResponseBody.Choices[0].Message.Content
-
-			// addMsg(uid, Msg{
-			// 	Role:"assistant",
-			// 			Content:reply,
-			// })
+			reason = gptResponseBody.Choices[0].FinishReason
 		}
 	} else {
 		if gptResponseBody != nil && len(gptResponseBody.Choices) > 0 {
 			reply = gptResponseBody.Choices[0].Text
+			reason = gptResponseBody.Choices[0].FinishReason
 		}
 	}
-	return reply, nil
+	return reply, reason, nil
 }
 
 func getUserMsgArray(uid string, msg string) []Msg {
@@ -110,6 +109,12 @@ func getUserMsgArray(uid string, msg string) []Msg {
 	msgsJson, _ := json.Marshal(msgs)
 	log.Printf("gpt %s request(%s)", msg, string(msgsJson))
 	return msgs
+}
+
+func getAssistanMsgArray(uid string, msg string) []Msg {
+	msgs, _ := msgMap[uid]
+	return append(msgs, Msg{Role: "assistant",
+		Content: msg})
 }
 
 // 假设需要存储的uid是int类型
@@ -132,16 +137,21 @@ func addMsg(uid string, msg Msg) {
 	msgMap[uid] = msgs
 }
 
-func httpRequestCompletions(uid string, msg string, runtimes int) (*ChatGPTResponseBody, error) {
+func getRequest(uid string, msg string, fromAssistant bool) ChatGPTRequestBody {
 	cfg := config.LoadConfig()
-	if cfg.ApiKey == "" {
-		return nil, errors.New("api key required")
-	}
+
 	var requestBody ChatGPTRequestBody
 	if cfg.Model == "gpt-3.5-turbo-0301" {
+		var msgs []Msg
+		if fromAssistant {
+			msgs = getAssistanMsgArray(uid, msg)
+		} else {
+			msgs = getUserMsgArray(uid, msg)
+		}
+
 		requestBody = ChatGPTRequestBody{
 			Model:            cfg.Model,
-			Messages:         getUserMsgArray(uid, msg),
+			Messages:         msgs,
 			MaxTokens:        cfg.MaxTokens,
 			Temperature:      cfg.Temperature,
 			TopP:             1,
@@ -158,6 +168,14 @@ func httpRequestCompletions(uid string, msg string, runtimes int) (*ChatGPTRespo
 			FrequencyPenalty: 0,
 			PresencePenalty:  0,
 		}
+	}
+	return requestBody
+}
+
+func httpRequestCompletions(requestBody ChatGPTRequestBody, runtimes int) (*ChatGPTResponseBody, error) {
+	cfg := config.LoadConfig()
+	if cfg.ApiKey == "" {
+		return nil, errors.New("api key required")
 	}
 
 	requestData, err := json.Marshal(requestBody)
@@ -181,7 +199,7 @@ func httpRequestCompletions(uid string, msg string, runtimes int) (*ChatGPTRespo
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.ApiKey)
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: 300 * time.Second}
 	response, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("client.Do error: %v", err)

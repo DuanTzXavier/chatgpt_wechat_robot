@@ -3,7 +3,6 @@ package handlers
 import (
 	"fmt"
 	"log"
-	"math/rand"
 	"strings"
 	"time"
 
@@ -72,16 +71,12 @@ func (h *UserMessageHandler) ReplyText() error {
 		return nil
 	}
 
-	maxInt := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(5)
-	time.Sleep(time.Duration(maxInt+1) * time.Second)
+	// maxInt := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(5)
+	// time.Sleep(time.Duration(maxInt+1) * time.Second)
 
 	log.Printf("Received User[%v], Content[%v], CreateTime[%v]", h.sender.NickName, h.msg.Content,
 		time.Unix(h.msg.CreateTime, 0).Format("2006/01/02 15:04:05"))
 
-	var (
-		reply string
-		err   error
-	)
 	// 1.获取上下文，如果字符串为空不处理
 	requestText := h.getRequestText()
 	if requestText == "" {
@@ -89,8 +84,19 @@ func (h *UserMessageHandler) ReplyText() error {
 		return nil
 	}
 
+	// 3.返回错误
+	return reply2user(h, h.msg.Content, true, 0)
+}
+
+func reply2user(h *UserMessageHandler, content string, fromAssistant bool, times int) error {
+
+	var (
+		reply  string
+		reason string
+		err    error
+	)
 	// 2.向GPT发起请求，如果回复文本等于空,不回复
-	reply, err = gpt.Completions(h.sender.NickName, h.msg.Content)
+	reply, reason, err = gpt.Completions(h.sender.NickName, content, fromAssistant)
 	if err != nil {
 		text := err.Error()
 		if strings.Contains(err.Error(), "context deadline exceeded") {
@@ -102,16 +108,28 @@ func (h *UserMessageHandler) ReplyText() error {
 		}
 		return err
 	}
+	sendMsg2User(h, reply)
 
+	if reason == "length" {
+		cfg := config.LoadConfig()
+		if times >= int(cfg.RepeatTimes) {
+			sendMsg2User(h, deadlineTooLangText)
+		} else {
+			reply2user(h, reply, true, times+1)
+		}
+	}
+	return nil
+}
+
+func sendMsg2User(h *UserMessageHandler, reply string) error {
 	// 2.设置上下文，回复用户
-	h.service.SetUserSessionContext(requestText, reply)
+	var err error
+	// h.service.SetUserSessionContext(requestText, reply)
 	_, err = h.msg.ReplyText(buildUserReply(reply))
 	if err != nil {
 		return fmt.Errorf("reply user error: %v ", err)
 	}
-
-	// 3.返回错误
-	return err
+	return nil
 }
 
 // getRequestText 获取请求接口的文本，要做一些清晰
@@ -144,19 +162,19 @@ func (h *UserMessageHandler) getRequestText() string {
 // buildUserReply 构建用户回复
 func buildUserReply(reply string) string {
 	// 1.去除空格问号以及换行号，如果为空，返回一个默认值提醒用户
-	textSplit := strings.Split(reply, "\n\n")
-	if len(textSplit) > 1 {
-		trimText := textSplit[0]
-		reply = strings.Trim(reply, trimText)
-	}
-	reply = strings.TrimSpace(reply)
+	// textSplit := strings.Split(reply, "\n\n")
+	// if len(textSplit) > 1 {
+	// 	trimText := textSplit[0]
+	// 	reply = strings.Trim(reply, trimText)
+	// }
+	// reply = strings.TrimSpace(reply)
 	if reply == "" {
 		return deadlineExceededText
 	}
 
 	// 2.如果用户有配置前缀，加上前缀
 	reply = config.LoadConfig().ReplyPrefix + "\n" + reply
-	reply = strings.Trim(reply, "\n")
+	// reply = strings.Trim(reply, "\n")
 
 	// 3.返回拼接好的字符串
 	return reply

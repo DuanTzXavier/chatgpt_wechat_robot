@@ -2,18 +2,20 @@ package handlers
 
 import (
 	"fmt"
+	"log"
+	"runtime"
+	"strings"
+	"time"
+
 	"github.com/eatmoreapple/openwechat"
 	"github.com/patrickmn/go-cache"
 	"github.com/qingconglaixueit/wechatbot/config"
 	"github.com/qingconglaixueit/wechatbot/pkg/logger"
 	"github.com/skip2/go-qrcode"
-	"log"
-	"runtime"
-	"strings"
-	"time"
 )
 
 const deadlineExceededText = "请求GPT服务器超时[裂开]得不到回复，请重新发送问题[旺柴]"
+const deadlineTooLangText = "请求GPT文案太长了[裂开]，没钱继续下去啦[旺柴]"
 
 var c = cache.New(config.LoadConfig().SessionTimeout, time.Minute*5)
 

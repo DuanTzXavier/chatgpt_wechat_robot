@@ -29,6 +29,8 @@ type Configuration struct {
 	ReplyPrefix string `json:"reply_prefix"`
 	// 清空会话口令
 	SessionClearToken string `json:"session_clear_token"`
+	// 重复请求次数
+	RepeatTimes int64 `json:"repeat_times"`
 }
 
 var config *Configuration
@@ -45,6 +47,7 @@ func LoadConfig() *Configuration {
 			Model:             "text-davinci-003",
 			Temperature:       0.9,
 			SessionClearToken: "下个问题",
+			RepeatTimes:       3,
 		}
 
 		// 判断配置文件是否存在，存在直接JSON读取

@@ -1,10 +1,11 @@
 {
   "api_key": "your api key",
-  "auto_pass": true,
+  "auto_pass": false,
   "session_timeout": 60,
   "max_tokens": 1024,
-  "model": "text-davinci-003",
-  "temperature": 1,
+  "model": "gpt-3.5-turbo-0301",
+  "temperature": 0.7,
   "reply_prefix": "来自机器人回复：",
-  "session_clear_token": "清空会话"
+  "session_clear_token": "清空会话",
+  "repeat_times":3
 }
